@@ -16,7 +16,23 @@
     },
     {
       "name": "storage.type.autoit",
-      "match": "\\b(?i:func|endfunc|const|enum)\\b"
+      "match": "\\b(?i:endfunc|const|enum)\\b"
+    },
+    {
+      "name": "meta.function.autoit",
+      "begin": "\\b(?i:func)\\b",
+      "beginCaptures": {
+        "0": {
+          "name": "storage.type.autoit"
+        }
+      },
+      "end": "(?<=\\))|$",
+      "patterns": [
+        {
+          "match": "\\b[a-zA-Z_]\\w*(?=\\s*\\()",
+          "name": "entity.name.function.definition.autoit"
+        }
+      ]
     },
     {
       "name": "storage.modifier.autoit",
@@ -32,7 +48,7 @@
     },
     {
       "match": "(?<!\\.)\\b[a-zA-Z_]\\w*(?=\\()",
-      "name": "entity.name.function.autoit"
+      "name": "variable.function.autoit"
     },
     {
       "name": "support.class.com.autoit",
