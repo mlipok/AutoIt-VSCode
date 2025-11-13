@@ -168,7 +168,7 @@
       }
     },
     {
-      "match": "(?x)\n          (?:0x\\h+) |                  # Hex\n          (?:-?(?:\\d+\\.?\\d*|\\.\\d+))    # Decimal\n          (?:[eE][-+]?\\d+)?            # Optional exponent\n        ",
+      "match": "\\b0[xX][0-9A-Fa-f]+\\b|(?<!\\w)(?:(\\d+\\.\\d+)|(\\d+\\.)|(\\d+)|(\\.\\d+))(?:[eE][-+]?\\d+)?(?!\\w)",
       "name": "constant.numeric.autoit"
     },
     {
