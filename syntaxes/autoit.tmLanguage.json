@@ -172,16 +172,16 @@
       "name": "constant.numeric.autoit"
     },
     {
-      "match": "[-+*/&]?=",
+      "match": "<|>|<>|[<>=]=",
+      "name": "keyword.operator.comparison.autoit"
+    },
+    {
+      "match": "(?:\\+=|-=|\\*=|/=|&=|\\^=|=)",
       "name": "keyword.operator.assignment.autoit"
     },
     {
       "match": "\\+|-|\\*|\\^|/|&",
       "name": "keyword.operator.arithmetic.autoit"
-    },
-    {
-      "match": "<|>|<>|[<>=]=",
-      "name": "keyword.operator.comparison.autoit"
     },
     {
       "match": "\\b(?i:not|and|or)\\b",
