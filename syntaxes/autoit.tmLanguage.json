@@ -91,7 +91,7 @@
       }
     },
     {
-      "begin": "(?i:^\\s*#c(?:omments\\-start|s))",
+      "begin": "(?i:^\\s*#c(?:omments\\-start|s))\\b.*$",
       "end": "(?i:^\\s*#c(?:omments\\-end|e))\\b.*$",
       "name": "comment.block.autoit"
     },
