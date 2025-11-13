@@ -111,7 +111,7 @@
           "name": "punctuation.definition.string.begin.autoit"
         }
       },
-      "end": "(\")(?!\")|^",
+      "end": "(\")(?!\")",
       "endCaptures": {
         "1": {
           "name": "punctuation.definition.string.end.autoit"
@@ -138,7 +138,7 @@
           "name": "punctuation.definition.string.begin.autoit"
         }
       },
-      "end": "(')(?!')|^",
+      "end": "(')(?!')",
       "endCaptures": {
         "1": {
           "name": "punctuation.definition.string.end.autoit"
@@ -176,12 +176,16 @@
       "name": "keyword.operator.comparison.autoit"
     },
     {
-      "match": "(?:\\+=|-=|\\*=|/=|&=|\\^=|=)",
+      "match": "(?:\\+=|-=|\\*=|/=|&=|=)",
       "name": "keyword.operator.assignment.autoit"
     },
     {
-      "match": "\\+|-|\\*|\\^|/|&",
+      "match": "\\+|-|\\*|/",
       "name": "keyword.operator.arithmetic.autoit"
+    },
+    {
+      "match": "&",
+      "name": "keyword.operator.concatenation.autoit"
     },
     {
       "match": "\\b(?i:not|and|or)\\b",
