@@ -172,7 +172,7 @@
       "name": "constant.numeric.autoit"
     },
     {
-      "match": "<|>|<>|[<>=]=",
+      "match": "(?:<>|<=|>=|==|<|>)",
       "name": "keyword.operator.comparison.autoit"
     },
     {
