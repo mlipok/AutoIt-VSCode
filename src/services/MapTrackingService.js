@@ -3,6 +3,31 @@ import IncludeResolver from '../utils/IncludeResolver.js';
 import fs from 'fs';
 
 /**
+ * Debounce helper
+ * @param {Function} func - Function to debounce
+ * @param {number} wait - Debounce delay in ms
+ * @returns {Function} Debounced function
+ */
+function debounce(func, wait) {
+  let timeout;
+  const debouncedFunction = function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+
+  // Add cancel method
+  debouncedFunction.cancel = () => {
+    clearTimeout(timeout);
+  };
+
+  return debouncedFunction;
+}
+
+/**
  * Singleton service for tracking Map variables across workspace
  */
 class MapTrackingService {
@@ -19,6 +44,15 @@ class MapTrackingService {
     this.fileParsers = new Map(); // filePath -> MapParser
     this.includeResolver = new IncludeResolver(workspaceRoot, autoitIncludePaths, maxIncludeDepth);
     this.workspaceRoot = workspaceRoot;
+
+    // Debouncing state
+    this.pendingParses = new Map(); // filePath -> { source, timestamp }
+    this.parseDebounceMs = 500;
+    this.ongoingParses = new Set(); // Track files currently being parsed
+
+    // Create debounced parse function per file
+    this.debouncedParseByFile = new Map(); // filePath -> debounced function
+
     MapTrackingService.instance = this;
   }
 
@@ -84,13 +118,77 @@ class MapTrackingService {
   }
 
   /**
-   * Update parsed data for a file
+   * Update parsed data for a file (immediate, no debouncing)
    * @param {string} filePath - Absolute file path
    * @param {string} source - File source code
    */
   updateFile(filePath, source) {
     const parser = new MapParser(source);
     this.fileParsers.set(filePath, parser);
+  }
+
+  /**
+   * Update file with debouncing (500ms delay after typing stops)
+   * @param {string} filePath - Absolute file path
+   * @param {string} source - File source code
+   */
+  updateFileDebounced(filePath, source) {
+    // Get or create debounced parser for this file
+    if (!this.debouncedParseByFile.has(filePath)) {
+      this.debouncedParseByFile.set(
+        filePath,
+        debounce((path, src) => {
+          this._parseFile(path, src);
+        }, this.parseDebounceMs),
+      );
+    }
+
+    // Store pending parse data
+    this.pendingParses.set(filePath, { source, timestamp: Date.now() });
+
+    // Trigger debounced parse
+    const debouncedParse = this.debouncedParseByFile.get(filePath);
+    debouncedParse(filePath, source);
+  }
+
+  /**
+   * Update file immediately without debouncing (for file open)
+   * @param {string} filePath - Absolute file path
+   * @param {string} source - File source code
+   */
+  updateFileImmediate(filePath, source) {
+    // Cancel any pending debounced parse
+    if (this.debouncedParseByFile.has(filePath)) {
+      const debouncedParse = this.debouncedParseByFile.get(filePath);
+      if (debouncedParse.cancel) {
+        debouncedParse.cancel();
+      }
+    }
+
+    this._parseFile(filePath, source);
+  }
+
+  /**
+   * Internal method to parse file (called after debounce)
+   * @param {string} filePath - Absolute file path
+   * @param {string} source - File source code
+   * @private
+   */
+  _parseFile(filePath, source) {
+    // Prevent duplicate parsing
+    if (this.ongoingParses.has(filePath)) {
+      return;
+    }
+
+    this.ongoingParses.add(filePath);
+
+    try {
+      const parser = new MapParser(source);
+      this.fileParsers.set(filePath, parser);
+    } finally {
+      this.ongoingParses.delete(filePath);
+      this.pendingParses.delete(filePath);
+    }
   }
 
   /**
@@ -169,6 +267,76 @@ class MapTrackingService {
       directKeys: Array.from(allDirectKeys),
       functionKeys: allFunctionKeys,
     };
+  }
+
+  /**
+   * Get nested Map structure for symbols
+   * @param {string} filePath - Absolute file path
+   * @param {string} mapName - Map variable name
+   * @returns {object} Nested Map structure tree
+   */
+  getMapStructure(filePath, mapName) {
+    const parser = this.fileParsers.get(filePath);
+    if (!parser) {
+      return { children: {} };
+    }
+
+    return parser.buildNestedMapStructure(mapName);
+  }
+
+  /**
+   * Get Map structure including resolved includes
+   * @param {string} filePath - Absolute file path
+   * @param {string} mapName - Map variable name
+   * @returns {Promise<object>} Nested Map structure with included keys
+   */
+  async getMapStructureWithIncludes(filePath, mapName) {
+    // Get structure from current file
+    const currentStructure = this.getMapStructure(filePath, mapName);
+
+    // Get structures from included files
+    const includedFiles = this.includeResolver.resolveAllIncludes(filePath);
+
+    for (const includedFile of includedFiles) {
+      // Parse included file if not cached
+      if (!this.fileParsers.has(includedFile)) {
+        try {
+          await fs.promises.access(includedFile, fs.constants.F_OK);
+          const source = await fs.promises.readFile(includedFile, 'utf8');
+          this.updateFileImmediate(includedFile, source);
+        } catch (error) {
+          console.warn(
+            `[MapTrackingService] Failed to read included file ${includedFile}:`,
+            error.message,
+          );
+          continue;
+        }
+      }
+
+      const includedStructure = this.getMapStructure(includedFile, mapName);
+
+      // Merge structures (flatten children)
+      this._mergeMapStructures(currentStructure, includedStructure);
+    }
+
+    return currentStructure;
+  }
+
+  /**
+   * Merge two Map structures
+   * @param {object} target - Target structure to merge into
+   * @param {object} source - Source structure to merge from
+   * @private
+   */
+  _mergeMapStructures(target, source) {
+    Object.keys(source.children).forEach(key => {
+      if (!target.children[key]) {
+        target.children[key] = source.children[key];
+      } else {
+        // Key exists, merge nested children
+        this._mergeMapStructures(target.children[key], source.children[key]);
+      }
+    });
   }
 }
 
