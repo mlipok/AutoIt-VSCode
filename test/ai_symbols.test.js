@@ -174,10 +174,30 @@ jest.mock('vscode', () => mockVSCode, { virtual: true });
 const { provideDocumentSymbols } = require('../src/ai_symbols');
 
 describe('Map Symbol Generation', () => {
+  let originalGetConfiguration;
+
   beforeEach(() => {
     // Reset MapTrackingService singleton before each test
     const MapTrackingService = require('../src/services/MapTrackingService').default;
     MapTrackingService.resetInstance();
+
+    // Store original configuration and set default mock
+    originalGetConfiguration = mockVSCode.workspace.getConfiguration;
+    mockVSCode.workspace.getConfiguration = jest.fn(() => ({
+      get: jest.fn((key, defaultValue) => {
+        if (key === 'symbolMaxLines') return 50000;
+        if (key === 'includePaths') return [];
+        if (key === 'maps.includeDepth') return 3;
+        if (key === 'maps.enableIntelligence') return true;
+        if (key === 'enableIntelligence') return true;
+        return defaultValue;
+      }),
+    }));
+  });
+
+  afterEach(() => {
+    // Restore original configuration mock
+    mockVSCode.workspace.getConfiguration = originalGetConfiguration;
   });
 
   describe('Flat Map keys', () => {
@@ -451,7 +471,7 @@ $mData.key = "value"`;
 
   describe('Configuration', () => {
     it('should not show Map keys when Map intelligence is disabled', async () => {
-      // Mock configuration to disable Map intelligence
+      // Override configuration for this test only
       mockVSCode.workspace.getConfiguration = jest.fn(() => ({
         get: jest.fn((key, defaultValue) => {
           if (key === 'enableIntelligence') return false;
@@ -470,17 +490,7 @@ $mUser.name = "John"`;
       // and Map variables should not have hierarchical structure
       expect(Array.isArray(symbols)).toBe(true);
 
-      // Restore configuration
-      mockVSCode.workspace.getConfiguration = jest.fn(() => ({
-        get: jest.fn((key, defaultValue) => {
-          if (key === 'symbolMaxLines') return 50000;
-          if (key === 'includePaths') return [];
-          if (key === 'maps.includeDepth') return 3;
-          if (key === 'maps.enableIntelligence') return true;
-          if (key === 'enableIntelligence') return true;
-          return defaultValue;
-        }),
-      }));
+      // Configuration will be restored by afterEach
     });
   });
 });

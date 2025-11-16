@@ -56,6 +56,54 @@ function extractMapKeySymbols(symbol, uri, results) {
 }
 
 /**
+ * Normalize a mixed array of DocumentSymbols/SymbolInformation into SymbolInformation.
+ * @param {Array<import('vscode').DocumentSymbol|import('vscode').SymbolInformation>|any} symbols
+ * @param {import('vscode').Uri} uri
+ * @returns {Array<import('vscode').SymbolInformation>}
+ */
+function flattenSymbols(symbols, uri) {
+  const flatSymbols = [];
+
+  if (!Array.isArray(symbols)) {
+    return flatSymbols;
+  }
+
+  symbols.forEach(symbol => {
+    if (symbol && symbol.children !== undefined) {
+      if (symbol.kind === SymbolKind.Variable && symbol.detail === 'Map') {
+        extractMapKeySymbols(symbol, uri, flatSymbols);
+      } else {
+        flatSymbols.push(
+          new SymbolInformation(
+            symbol.name,
+            symbol.kind,
+            symbol.detail || '',
+            new Location(uri, symbol.range),
+          ),
+        );
+
+        if (symbol.children && symbol.children.length > 0) {
+          symbol.children.forEach(child => {
+            flatSymbols.push(
+              new SymbolInformation(
+                child.name,
+                child.kind,
+                symbol.name,
+                new Location(uri, child.range),
+              ),
+            );
+          });
+        }
+      }
+    } else if (symbol) {
+      flatSymbols.push(symbol);
+    }
+  });
+
+  return flatSymbols;
+}
+
+/**
  * Process files in batches to prevent UI freezing on large workspaces.
  * @param {Array} files - Array of file URIs to process
  * @param {number} batchSize - Number of files to process per batch
@@ -81,46 +129,7 @@ async function processBatch(files, batchSize, token) {
           const symbols = await provideDocumentSymbols(document);
 
           // Flatten DocumentSymbol to SymbolInformation
-          const flatSymbols = [];
-
-          if (Array.isArray(symbols)) {
-            symbols.forEach(symbol => {
-              // Check if this is a DocumentSymbol (has children property)
-              if (symbol.children !== undefined) {
-                // Check if this is a Map symbol
-                if (symbol.kind === SymbolKind.Variable && symbol.detail === 'Map') {
-                  extractMapKeySymbols(symbol, file, flatSymbols);
-                } else {
-                  // Regular DocumentSymbol - convert to SymbolInformation
-                  flatSymbols.push(
-                    new SymbolInformation(
-                      symbol.name,
-                      symbol.kind,
-                      symbol.detail || '',
-                      new Location(file, symbol.range),
-                    ),
-                  );
-
-                  // Add children as separate SymbolInformation with containerName
-                  if (symbol.children && symbol.children.length > 0) {
-                    symbol.children.forEach(child => {
-                      flatSymbols.push(
-                        new SymbolInformation(
-                          child.name,
-                          child.kind,
-                          symbol.name, // containerName is parent symbol name
-                          new Location(file, child.range),
-                        ),
-                      );
-                    });
-                  }
-                }
-              } else {
-                // Already SymbolInformation, add directly
-                flatSymbols.push(symbol);
-              }
-            });
-          }
+          const flatSymbols = flattenSymbols(symbols, file);
 
           return { uri: file.toString(), symbols: flatSymbols };
         } catch {
@@ -148,7 +157,7 @@ async function processBatch(files, batchSize, token) {
  * Fetches symbols for all AutoIt scripts in the workspace.
  * Uses batch processing to prevent UI freezing on large projects.
  *
- * @param {CancellationToken} token - Cancellation token
+ * @param {import('vscode').CancellationToken} token - Cancellation token
  * @returns {Promise<Map>} A promise that resolves to a map of file URI to symbols.
  */
 async function getWorkspaceSymbols(token) {
@@ -238,46 +247,7 @@ async function updateFileSymbols(uri) {
     const symbols = await provideDocumentSymbols(document);
 
     // Flatten DocumentSymbol to SymbolInformation
-    const flatSymbols = [];
-
-    if (Array.isArray(symbols)) {
-      symbols.forEach(symbol => {
-        // Check if this is a DocumentSymbol (has children property)
-        if (symbol.children !== undefined) {
-          // Check if this is a Map symbol
-          if (symbol.kind === SymbolKind.Variable && symbol.detail === 'Map') {
-            extractMapKeySymbols(symbol, uri, flatSymbols);
-          } else {
-            // Regular DocumentSymbol - convert to SymbolInformation
-            flatSymbols.push(
-              new SymbolInformation(
-                symbol.name,
-                symbol.kind,
-                symbol.detail || '',
-                new Location(uri, symbol.range),
-              ),
-            );
-
-            // Add children as separate SymbolInformation with containerName
-            if (symbol.children && symbol.children.length > 0) {
-              symbol.children.forEach(child => {
-                flatSymbols.push(
-                  new SymbolInformation(
-                    child.name,
-                    child.kind,
-                    symbol.name, // containerName is parent symbol name
-                    new Location(uri, child.range),
-                  ),
-                );
-              });
-            }
-          }
-        } else {
-          // Already SymbolInformation, add directly
-          flatSymbols.push(symbol);
-        }
-      });
-    }
+    const flatSymbols = flattenSymbols(symbols, uri);
 
     symbolsCache.set(uri.toString(), flatSymbols);
   } catch {
@@ -288,7 +258,7 @@ async function updateFileSymbols(uri) {
 
 /**
  * Remove a file from the cache when deleted.
- * @param {Uri} uri - The file URI that was deleted
+ * @param {import('vscode').Uri} uri - The file URI that was deleted
  */
 function removeFileSymbols(uri) {
   symbolsCache.delete(uri.toString());
